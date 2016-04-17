@@ -5,22 +5,12 @@ var http = require('http').Server(app);
 var indico = require('indico.io');
 var indicoApiKey = process.env.INDICO_API_KEY;
 indico.apiKey = indicoApiKey;
-
-// Initialize a new instance of socket.io by passing the http object
 var io = require('socket.io')(http);
-
-var color = 'rgb(64, 64, 64)';
-var logError = function(err) { console.log(err); }
-var response = function(res) {
-    console.log(res);
-    color = computeSentimentColor(res);
-    console.log(color);
-}
 
 var computeSentimentColor = function (sentiment) {
     // Algorithm adapted from UX StackExchange
     // http://ux.stackexchange.com/q/34875/25996
-    var rating = sentiment * 10;
+    var rating = parseFloat(sentiment) * 10;
     var parts = (rating > 5) ? (1-((rating-5)/5)) : rating/5;
     parts = Math.round(parts * 255);
     if (rating < 5) {
@@ -33,9 +23,8 @@ var computeSentimentColor = function (sentiment) {
         color = [255,255,0]
     }
     return 'rgb(' + color.join(',') + ')';
-}
+};
 
-// Refactor route handler to use `sendFile` instead
 app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');
 });
@@ -49,13 +38,20 @@ io.on('connection', function(socket){
     });
     // Listen on the `chat message` event for messages
     socket.on('chat message', function(msg){
-        indico.sentiment(msg)
-            .then(response)
+        var logError = function(err) { console.log(err); }
+        var promise = indico.sentiment(msg)
+            .then(function(res){
+                console.log('sentiment: ' + res);
+                var rgbAttr = computeSentimentColor(res);
+                console.log('rgbAttr: ' + rgbAttr);
+                console.log('message: ' + msg);
+                io.emit('message event',
+                    {
+                        'msg': msg,
+                        'rgbAttr': rgbAttr
+                    });
+            })
             .catch(logError)
-        // var color = computeSentimentColor(response);
-        console.log('message: ' + msg);
-        io.emit('chat message', msg);
-        // io.emit('message rgb', color);
     });
 });
 
